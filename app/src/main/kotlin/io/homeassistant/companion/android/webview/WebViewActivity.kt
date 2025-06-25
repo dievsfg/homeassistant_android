@@ -119,6 +119,7 @@ import okhttp3.OkHttpClient
 import org.chromium.net.CronetEngine
 import org.json.JSONObject
 import timber.log.Timber
+import androidx.core.net.toUri
 
 @AndroidEntryPoint
 class WebViewActivity : BaseActivity(), io.homeassistant.companion.android.webview.WebView {
@@ -204,7 +205,7 @@ class WebViewActivity : BaseActivity(), io.homeassistant.companion.android.webvi
     @Inject
     lateinit var okHttpClient: OkHttpClient
 
-    private lateinit var binding: ActivityWebviewBinding
+    //private lateinit var binding: ActivityWebviewBinding
     private lateinit var webView: WebView
     private lateinit var loadedUrl: String
     private lateinit var decor: FrameLayout
@@ -251,8 +252,7 @@ class WebViewActivity : BaseActivity(), io.homeassistant.companion.android.webvi
 
         super.onCreate(savedInstanceState)
 
-        binding = ActivityWebviewBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+
         UpdateUtil.checkNew(this, okHttpClient)
 
         if (intent.extras?.containsKey(EXTRA_SERVER) == true) {
@@ -462,9 +462,7 @@ class WebViewActivity : BaseActivity(), io.homeassistant.companion.android.webvi
                                 } else {
                                     Timber.w("No intent to launch app found, opening app store")
                                     val marketIntent = Intent(Intent.ACTION_VIEW)
-                                    marketIntent.data = Uri.parse(
-                                        MARKET_PREFIX + it.toString().substringAfter(APP_PREFIX),
-                                    )
+                                    marketIntent.data = (MARKET_PREFIX + it.toString().substringAfter(APP_PREFIX)).toUri()
                                     startActivity(marketIntent)
                                 }
                                 return true
@@ -481,7 +479,7 @@ class WebViewActivity : BaseActivity(), io.homeassistant.companion.android.webvi
                                     Timber.w("No app found for intent prefix, opening app store")
                                     val marketIntent = Intent(Intent.ACTION_VIEW)
                                     marketIntent.data =
-                                        Uri.parse(MARKET_PREFIX + intent.`package`.toString())
+                                        (MARKET_PREFIX + intent.`package`.toString()).toUri()
                                     startActivity(marketIntent)
                                 } else {
                                     startActivity(intent)
@@ -986,7 +984,7 @@ class WebViewActivity : BaseActivity(), io.homeassistant.companion.android.webvi
 
     fun exoPlayHls(json: JSONObject) {
         val payload = json.getJSONObject("payload")
-        val uri = Uri.parse(payload.getString("url"))
+        val uri = payload.getString("url").toUri()
         val isMuted = payload.optBoolean("muted")
         runOnUiThread {
             exoPlayer.value = initializePlayer(this).apply {

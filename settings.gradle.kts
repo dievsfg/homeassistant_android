@@ -1,4 +1,4 @@
-include(":common", ":app")
+include(":common", ":app", ":testing-unit", ":lint")
 
 rootProject.name = "home-assistant-android"
 
@@ -38,6 +38,7 @@ reckon {
     setTagWriter { it.toString() }
 }
 
+
 dependencyResolutionManagement {
     repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
     repositories {
@@ -54,3 +55,8 @@ dependencyResolutionManagement {
         maven("https://jitpack.io")
     }
 }
+
+
+//typesafeConventions {
+//    allowTopLevelBuild = true
+//}

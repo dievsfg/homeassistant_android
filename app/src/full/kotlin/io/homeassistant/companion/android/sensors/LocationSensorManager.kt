@@ -20,24 +20,14 @@ import android.os.Build
 import android.os.Looper
 import android.os.PowerManager
 import androidx.core.content.getSystemService
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.Geofence
-import com.google.android.gms.location.GeofencingClient
-import com.google.android.gms.location.GeofencingEvent
-import com.google.android.gms.location.GeofencingRequest
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import android.text.TextUtils
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.work.impl.utils.getActiveNetworkCompat
-import com.amap.api.location.AMapLocation
-import com.amap.api.location.AMapLocationClient
-import com.amap.api.location.AMapLocationClientOption
-import com.amap.api.location.AMapLocationListener
+//import com.amap.api.location.AMapLocation
+//import com.amap.api.location.AMapLocationClient
+//import com.amap.api.location.AMapLocationClientOption
+//import com.amap.api.location.AMapLocationListener
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.AndroidEntryPoint
@@ -48,8 +38,6 @@ import io.homeassistant.companion.android.common.R as commonR
 import io.homeassistant.companion.android.common.bluetooth.BluetoothUtils
 import io.homeassistant.companion.android.common.data.integration.Entity
 import io.homeassistant.companion.android.common.data.integration.UpdateLocation
-import io.homeassistant.companion.android.common.data.integration.containsWithAccuracy
-import io.homeassistant.companion.android.common.data.integration.ZoneAttributes
 import io.homeassistant.companion.android.common.data.prefs.PrefsRepository
 import io.homeassistant.companion.android.common.notifications.DeviceCommandData
 import io.homeassistant.companion.android.common.sensors.SensorManager
@@ -72,12 +60,11 @@ import kotlinx.coroutines.runBlocking
 import java.io.IOException
 import java.util.Locale
 import javax.inject.Inject
-import io.homeassistant.companion.android.common.R as commonR
-
+import timber.log.Timber
+import androidx.core.content.edit
 
 var lastTime = 0L
 var lastTime2 = 0L
-import timber.log.Timber
 
 @AndroidEntryPoint
 class LocationSensorManager :  BroadcastReceiver(), SensorManager {
@@ -207,8 +194,8 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                     backgroundLocation.id,
                     SETTING_HIGH_ACCURACY_MODE,
                     enabled.toString(),
-                    SensorSettingType.TOGGLE
-                )
+                    SensorSettingType.TOGGLE,
+                ),
             )
         }
 
@@ -226,8 +213,8 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                     backgroundLocation.id,
                     SETTING_HIGH_ACCURACY_MODE_UPDATE_INTERVAL,
                     updateInterval.toString(),
-                    SensorSettingType.NUMBER
-                )
+                    SensorSettingType.NUMBER,
+                ),
             )
         }
     }
@@ -236,55 +223,6 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
 
     lateinit var latestContext: Context
 
-    //声明AMapLocationClient类对象
-    var mLocationClient: AMapLocationClient? = null
-
-    var amapLocation: AMapLocation? = null
-
-
-    //声明定位回调监听器
-    private var mLocationListener = AMapLocationListener { location ->
-        if (location.errorCode == 0) {
-
-            amapLocation = location
-            Log.d(TAG, "Amap Location -- ${location.latitude}")
-
-            addressUpdata(latestContext)
-            val sensorDao = AppDatabase.getInstance(latestContext).sensorDao()
-            val sensorSettings = sensorDao.getSettings(backgroundLocation.id)
-            val minAccuracy = sensorSettings
-                .firstOrNull { it.name == SETTING_ACCURACY }?.value?.toIntOrNull()
-                ?: DEFAULT_MINIMUM_ACCURACY
-            sensorDao.add(
-                SensorSetting(
-                    backgroundLocation.id,
-                    SETTING_ACCURACY,
-                    minAccuracy.toString(),
-                    SensorSettingType.NUMBER
-                )
-            )
-            if (location.accuracy > minAccuracy) {
-                Log.d(TAG, "Location accuracy didn't meet requirements, disregarding: $location")
-            } else {
-                val hm = GCJ2WGS.delta(location.latitude, location.longitude)
-                location.latitude = hm["lat"]!!
-                location.longitude = hm["lon"]!!
-                runBlocking {
-                    getEnabledServers(latestContext, singleAccurateLocation).forEach { serverId ->
-                        sendLocationUpdate(location, serverId, false)
-                    }
-                }
-            }
-            //可在其中解析amapLocation获取相应内容。
-        } else {
-            //定位失败时，可通过ErrCode（错误码）信息来确定失败的原因，errInfo是错误信息，详见错误码表。
-            Log.e(
-                TAG, "Location Error, ErrCode:"
-                        + location.errorCode + ", errInfo:"
-                        + location.errorInfo
-            )
-        }
-    }
 
     override fun onReceive(context: Context, intent: Intent) {
         latestContext = context
@@ -299,7 +237,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 ACTION_PROCESS_HIGH_ACCURACY_LOCATION,
                 -> handleLocationUpdate(intent)
 
-                ACTION_PROCESS_GEO -> handleGeoUpdate(intent)
+                ACTION_PROCESS_GEO -> handleLocationUpdate(intent)
                 ACTION_REQUEST_ACCURATE_LOCATION_UPDATE -> requestSingleAccurateLocation()
                 ACTION_FORCE_HIGH_ACCURACY -> {
                     when (val command = intent.extras?.getString("command")) {
@@ -352,7 +290,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 isZoneLocationSetup = false
             }
             if (!zoneEnabled && isZoneLocationSetup) {
-                removeGeofenceUpdateRequests()
+                //removeGeofenceUpdateRequests()
                 isZoneLocationSetup = false
             }
             if (!backgroundEnabled && isBackgroundLocationSetup) {
@@ -362,13 +300,13 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             }
             if (zoneEnabled && !isZoneLocationSetup) {
                 isZoneLocationSetup = true
-                requestZoneUpdates()
+                //requestZoneUpdates()
             }
-            if (zoneEnabled && isZoneLocationSetup && geofenceRegistered != zoneServers) {
-                Timber.d("Zone enabled servers changed. Reconfigure zones.")
-                removeGeofenceUpdateRequests()
-                requestZoneUpdates()
-            }
+//            if (zoneEnabled && isZoneLocationSetup && geofenceRegistered != zoneServers) {
+//                Timber.d("Zone enabled servers changed. Reconfigure zones.")
+//                removeGeofenceUpdateRequests()
+//                requestZoneUpdates()
+//            }
 
             val now = System.currentTimeMillis()
             if (
@@ -377,7 +315,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             ) {
                 Timber.d("Background location updates appear to have stopped, restarting location updates")
                 isBackgroundLocationSetup = false
-                fusedLocationProviderClient?.flushLocations()
+                //fusedLocationProviderClient?.flushLocations()
                 removeBackgroundUpdateRequests()
             } else if (
                 highAccuracyModeEnabled &&
@@ -432,13 +370,13 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                     }
                 }
 
-                if (highAccuracyTriggerRange != lastHighAccuracyTriggerRange ||
-                    highAccuracyZones != lastHighAccuracyZones
-                ) {
-                    Timber.d("High accuracy mode geo parameters changed. Reconfigure zones.")
-                    removeGeofenceUpdateRequests()
-                    requestZoneUpdates()
-                }
+//                if (highAccuracyTriggerRange != lastHighAccuracyTriggerRange ||
+//                    highAccuracyZones != lastHighAccuracyZones
+//                ) {
+//                    Timber.d("High accuracy mode geo parameters changed. Reconfigure zones.")
+//                    removeGeofenceUpdateRequests()
+//                    requestZoneUpdates()
+//                }
             }
 
             val highAccuracyModeSettingEnabled = getHighAccuracyModeSetting()
@@ -698,7 +636,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
     }
 
     private fun removeBackgroundUpdateRequests() {
-        mLocationClient?.stopLocation()
+        //mLocationClient?.stopLocation()
     }
 
     private suspend fun requestLocationUpdates() {
@@ -709,37 +647,37 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
         Timber.d("Registering for location updates.")
         val amapKey = latestContext.getSharedPreferences("config", Context.MODE_PRIVATE)
             .getString("amapKey", "")
-        if (amapKey.isNullOrEmpty() || amapKey == "0") {
+        //if (amapKey.isNullOrEmpty() || amapKey == "0") {
             getLocation(latestContext, amapKey == "0")
-        } else {
-            AMapLocationClient.updatePrivacyShow(latestContext, true, true)
-            AMapLocationClient.updatePrivacyAgree(latestContext, true)
-            AMapLocationClient.setApiKey(amapKey)
-
-            mLocationClient = AMapLocationClient(latestContext)
-
-            mLocationClient!!.setLocationListener(mLocationListener)
-            val mLocationOption = AMapLocationClientOption()
-
-            if (lastHighAccuracyMode) {
-                mLocationOption.locationMode =
-                    AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
-            } else {
-                mLocationOption.locationMode =
-                    AMapLocationClientOption.AMapLocationMode.Battery_Saving
-            }
-            if (lastHighAccuracyUpdateInterval > 999999) {
-                mLocationOption.isOnceLocation = true
-                mLocationOption.isOnceLocationLatest = true
-            } else {
-                if (lastHighAccuracyUpdateInterval < 10) lastHighAccuracyUpdateInterval = 10
-                mLocationOption.interval = lastHighAccuracyUpdateInterval * 1000L
-                mLocationOption.isOnceLocation = false
-
-            }
-            mLocationClient!!.setLocationOption(mLocationOption)
-            mLocationClient!!.startLocation()
-        }
+//        } else {
+//            AMapLocationClient.updatePrivacyShow(latestContext, true, true)
+//            AMapLocationClient.updatePrivacyAgree(latestContext, true)
+//            AMapLocationClient.setApiKey(amapKey)
+//
+//            mLocationClient = AMapLocationClient(latestContext)
+//
+//            mLocationClient!!.setLocationListener(mLocationListener)
+//            val mLocationOption = AMapLocationClientOption()
+//
+//            if (lastHighAccuracyMode) {
+//                mLocationOption.locationMode =
+//                    AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
+//            } else {
+//                mLocationOption.locationMode =
+//                    AMapLocationClientOption.AMapLocationMode.Battery_Saving
+//            }
+//            if (lastHighAccuracyUpdateInterval > 999999) {
+//                mLocationOption.isOnceLocation = true
+//                mLocationOption.isOnceLocationLatest = true
+//            } else {
+//                if (lastHighAccuracyUpdateInterval < 10) lastHighAccuracyUpdateInterval = 10
+//                mLocationOption.interval = lastHighAccuracyUpdateInterval * 1000L
+//                mLocationOption.isOnceLocation = false
+//
+//            }
+//            mLocationClient!!.setLocationOption(mLocationOption)
+//            mLocationClient!!.startLocation()
+//        }
 
     }
 
@@ -765,14 +703,15 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                     runBlocking {
                         getEnabledServers(
                             latestContext,
-                            singleAccurateLocation
+                            singleAccurateLocation,
                         ).forEach { serverId ->
                             sendLocationUpdate(it, serverId, wifi)
                         }
                     }
                 }
 
-            }, Looper.getMainLooper()
+            },
+            Looper.getMainLooper(),
         )
 
         if (lastTime2 == 0L) {
@@ -785,23 +724,24 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                     runBlocking {
                         getEnabledServers(
                             latestContext,
-                            singleAccurateLocation
+                            singleAccurateLocation,
                         ).forEach { serverId ->
                             sendLocationUpdate(it, serverId, wifi, true)
                         }
                     }
-                }, Looper.getMainLooper()
+                },
+                Looper.getMainLooper(),
             )
         }
 
         runBlocking {
             locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
                 ?.let {
-                    Log.e("getLastKnownLocation", "${it.latitude}:${it.longitude}")
+                    Timber.e("${it.latitude}:${it.longitude}")
                     if (lastTime2 != 0L && System.currentTimeMillis() - lastTime2 < 180000) return@let
                     getEnabledServers(
                         latestContext,
-                        singleAccurateLocation
+                        singleAccurateLocation,
                     ).forEach { serverId ->
                         sendLocationUpdate(it, serverId, wifi)
                     }
@@ -820,8 +760,9 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
         } else {
             canCloseGps = 0
         }
-        latestContext.getSharedPreferences("config", Context.MODE_PRIVATE).edit()
-            .putInt("canCloseGps", canCloseGps).apply()
+        latestContext.getSharedPreferences("config", Context.MODE_PRIVATE).edit {
+            putInt("canCloseGps", canCloseGps)
+        }
     }
 
     private fun isUsingWifi(): Boolean {
@@ -892,22 +833,22 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 "CountryCode" to address.countryCode,
                 "Locality" to address.locality,
                 "SubLocality" to address.subLocality,
-                "Thoroughfare" to address.thoroughfare
-            )
+                "Thoroughfare" to address.thoroughfare,
+            ),
         )
     }
 
-    private fun handleLocationUpdate(intent: Intent) {
-        Log.d(TAG, "Received location update.")
+    private suspend fun handleLocationUpdate(intent: Intent) {
+        Timber.d("Received location update.")
         val serverIds = getEnabledServers(latestContext, backgroundLocation)
         serverIds.forEach {
             lastLocationReceived[it] = System.currentTimeMillis()
         }
-        if (mLocationClient != null) {
-            mLocationClient?.startLocation()
-        } else {
+//        if (mLocationClient != null) {
+//            mLocationClient?.startLocation()
+//        } else {
             requestLocationUpdates()
-        }
+      //  }
     }
 
     override suspend fun getAvailableSensors(context: Context): List<SensorManager.BasicSensor> {
@@ -925,11 +866,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
         ignoreAccuracy: Boolean = false,
     ) {
         Timber.d(
-            TAG,
-            "Last Location: " +
-                    "\nCoords:(${location.latitude}, ${location.longitude})" +
-                    "\nAccuracy: ${location.accuracy}" +
-                    "\nBearing: ${location.bearing}"
+                "Last Location: \nCoords:(${location.latitude}, ${location.longitude})\nAccuracy: ${location.accuracy}\nBearing: ${location.bearing}",
         )
         var accuracy = 0
         if (location.accuracy.toInt() >= 0) {
@@ -970,9 +907,8 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
 //        }
 
         if (location.time < (lastLocationSend[serverId]?:0) || (now - location.time) > 320000) {
-            Log.d(
-                TAG,
-                "Skipping old location update since time is before the last one we sent, received: ${location.time} last sent: $lastLocationSend"
+            Timber.d(
+                "Skipping old location update since time is before the last one we sent, received: ${location.time} last sent: $lastLocationSend",
             )
             return
         }
@@ -1014,16 +950,16 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             GeocodeSensorManager.geocodedLocation,
             GeocodeSensorManager.SETTINGS_INCLUDE_LOCATION,
             SensorSettingType.TOGGLE,
-            "false"
+            "false",
         ).toBoolean()
 
         ioScope.launch {
             try {
                 serverManager(latestContext).integrationRepository(serverId).updateLocation(updateLocation)
-                Timber.d("Location update sent successfully for $serverId as $updateLocationAs")
+                //Timber.d("Location update sent successfully for $serverId as $updateLocationAs")
                 lastLocationSend[serverId] = now
                 lastUpdateLocation[serverId] = updateLocationString
-                logLocationUpdate(location, updateLocation, serverId, trigger, LocationHistoryItemResult.SENT)
+                //logLocationUpdate(location, updateLocation, serverId, trigger, LocationHistoryItemResult.SENT)
 
                 // Update Geocoded Location Sensor
                 if (geocodeIncludeLocation) {
@@ -1049,7 +985,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             latestContext,
             0,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
     }
 
@@ -1078,8 +1014,8 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                     backgroundLocation.id,
                     SETTING_HIGH_ACCURACY_MODE_TRIGGER_RANGE_ZONE,
                     highAccuracyTriggerRangeInt.toString(),
-                    SensorSettingType.NUMBER
-                )
+                    SensorSettingType.NUMBER,
+                ),
             )
         }
 
@@ -1142,8 +1078,8 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 singleAccurateLocation.id,
                 "lastAccurateLocationRequest",
                 now.toString(),
-                "string"
-            )
+                "string",
+            ),
         )
     }
 
@@ -1182,8 +1118,8 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
         }
     }
 
-    override fun requestSensorUpdate(
-        context: Context
+    override suspend fun requestSensorUpdate(
+        context: Context,
     ) {
         latestContext = context
         if (isEnabled(context, zoneLocation) || isEnabled(context, backgroundLocation))
@@ -1197,7 +1133,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 context.sendBroadcast(
                     Intent(context, this.javaClass).apply {
                         action = ACTION_REQUEST_ACCURATE_LOCATION_UPDATE
-                    }
+                    },
                 )
             }
         } else
@@ -1206,47 +1142,47 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                     singleAccurateLocation.id,
                     SETTING_INCLUDE_SENSOR_UPDATE,
                     "false",
-                    SensorSettingType.TOGGLE
-                )
+                    SensorSettingType.TOGGLE,
+                ),
             )
     }
 
-    private fun addressUpdata(context: Context) {
-        var addressStr = amapLocation!!.address
-        val attributes = amapLocation.let {
-            mapOf(
-                "Administrative Area" to it!!.district,
-                "Country" to it.city,
-                "accuracy" to it.accuracy,
-                "altitude" to it.altitude,
-                "bearing" to it.bearing,
-                "provider" to it.provider,
-                "time" to it.time,
-                "Locality" to it.province,
-                "Latitude" to it.latitude,
-                "Longitude" to it.longitude,
-                "Postal Code" to it.cityCode,
-                "Thoroughfare" to it.street,
-                //"ISO Country Code" to it.cityCode,
-                "vertical_accuracy" to if (Build.VERSION.SDK_INT >= 26) it.verticalAccuracyMeters.toInt() else 0,
-            )
-        }
-        if (TextUtils.isEmpty(addressStr)) {
-            addressStr =
-                amapLocation!!.city + amapLocation!!.district + amapLocation!!.street + amapLocation!!.aoiName + amapLocation!!.floor
-        }
-        if (TextUtils.isEmpty(addressStr)) {
-            Log.d(TAG, "addressStr--" + amapLocation!!.locationDetail)
-            return
-        }
-        onSensorUpdated(
-            context,
-            GeocodeSensorManager.geocodedLocation,
-            addressStr,
-            "mdi:map",
-            attributes
-        )
-    }
+//    private fun addressUpdata(context: Context) {
+//        var addressStr = amapLocation!!.address
+//        val attributes = amapLocation.let {
+//            mapOf(
+//                "Administrative Area" to it!!.district,
+//                "Country" to it.city,
+//                "accuracy" to it.accuracy,
+//                "altitude" to it.altitude,
+//                "bearing" to it.bearing,
+//                "provider" to it.provider,
+//                "time" to it.time,
+//                "Locality" to it.province,
+//                "Latitude" to it.latitude,
+//                "Longitude" to it.longitude,
+//                "Postal Code" to it.cityCode,
+//                "Thoroughfare" to it.street,
+//                //"ISO Country Code" to it.cityCode,
+//                "vertical_accuracy" to if (Build.VERSION.SDK_INT >= 26) it.verticalAccuracyMeters.toInt() else 0,
+//            )
+//        }
+//        if (TextUtils.isEmpty(addressStr)) {
+//            addressStr =
+//                amapLocation!!.city + amapLocation!!.district + amapLocation!!.street + amapLocation!!.aoiName + amapLocation!!.floor
+//        }
+//        if (TextUtils.isEmpty(addressStr)) {
+//            Timber.d("addressStr--${amapLocation!!.locationDetail}")
+//            return
+//        }
+//        onSensorUpdated(
+//            context,
+//            GeocodeSensorManager.geocodedLocation,
+//            addressStr,
+//            "mdi:map",
+//            attributes,
+//        )
+//    }
 
 //    private fun logLocationUpdate(
 //        location: Location?,
