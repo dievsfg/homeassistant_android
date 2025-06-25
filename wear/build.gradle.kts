@@ -1,67 +1,23 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
+    alias(libs.plugins.homeassistant.android.application)
     alias(libs.plugins.google.services)
-    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.screenshot)
 }
 
 android {
-    namespace = "io.homeassistant.companion.android"
-
-    compileSdk = libs.versions.androidSdk.compile.get().toInt()
-
     defaultConfig {
-        applicationId = "io.homeassistant.companion.android"
         minSdk = libs.versions.androidSdk.wear.min.get().toInt()
         targetSdk = libs.versions.androidSdk.wear.target.get().toInt()
 
         versionName = project.version.toString()
         // We add 1 because the app and wear versions need to have different version codes.
-        versionCode = (System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1) + 1
+        versionCode = 1 + checkNotNull(versionCode) { "Did you forget to apply the convention plugin that set the version code?" }
     }
 
-    buildFeatures {
-        viewBinding = true
-        compose = true
-        buildConfig = true
-    }
+    experimentalProperties["android.experimental.enableScreenshotTest"] = true
 
-    signingConfigs {
-        create("release") {
-            storeFile = file("../nestor.keystore")
-            storePassword = System.getenv("NESTOR_KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("NESTOR_KEYSTORE_ALIAS")
-            keyPassword = System.getenv("NESTOR_KEYSTORE_PASSWORD")
-            enableV1Signing = true
-            enableV2Signing = true
-        }
-    }
-
-    buildTypes {
-        named("debug").configure {
-            applicationIdSuffix = ".debug"
-        }
-        named("release").configure {
-            isDebuggable = false
-            isJniDebuggable = false
-            signingConfig = signingConfigs.getByName("release")
-        }
-    }
-
-    kotlinOptions {
-        jvmTarget = libs.versions.javaVersion.get()
-    }
-
-    compileOptions {
-        isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility(libs.versions.javaVersion.get())
-        targetCompatibility(libs.versions.javaVersion.get())
-    }
-
-    lint {
-        disable += "MissingTranslation"
+    screenshotTests {
+        imageDifferenceThreshold = 0.00025f // 0.025%
     }
 }
 
@@ -85,11 +41,8 @@ dependencies {
     implementation(libs.wear.remote.interactions)
     implementation(libs.wear.phone.interactions)
 
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.android.compiler)
-
-    implementation(libs.jackson.module.kotlin)
-    implementation(libs.okhttp)
+    implementation(platform(libs.okhttp.bom))
+    implementation(libs.okhttp.android)
 
     implementation(libs.iconics.core)
     implementation(libs.appcompat)
@@ -108,8 +61,6 @@ dependencies {
     implementation(libs.wear.compose.navigation)
     implementation(libs.wear.tooling)
 
-    implementation(libs.bundles.horologist)
-
     implementation(libs.guava)
     implementation(libs.bundles.wear.tiles)
 
@@ -119,4 +70,9 @@ dependencies {
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    screenshotTestImplementation(libs.compose.uiTooling)
+
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.bundles.androidx.test)
+    androidTestImplementation(libs.bundles.androidx.compose.ui.test)
 }

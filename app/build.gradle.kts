@@ -1,26 +1,22 @@
+import com.google.firebase.appdistribution.gradle.firebaseAppDistribution
 import com.google.gms.googleservices.GoogleServicesPlugin.GoogleServicesPluginConfig
 import java.text.SimpleDateFormat
 
 
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.kotlin.parcelize)
+    alias(libs.plugins.homeassistant.android.application)
+    alias(libs.plugins.homeassistant.android.flavor)
     alias(libs.plugins.firebase.appdistribution)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.homeassistant.android.dependencies)
+    alias(libs.plugins.kotlin.parcelize)
+    alias(libs.plugins.screenshot)
     alias(libs.plugins.hilt)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
-    namespace = "io.homeassistant.companion.android"
-
-    compileSdk = libs.versions.androidSdk.compile.get().toInt()
-
-    ndkVersion = "21.3.6528147"
-
     useLibrary("android.car")
 
     defaultConfig {
@@ -31,30 +27,26 @@ android {
         versionName = getVersionName()
         versionCode = getVersionCode()
 
-        manifestPlaceholders["sentryRelease"] = "$applicationId@$versionName"
-        manifestPlaceholders["sentryDsn"] = System.getenv("SENTRY_DSN") ?: ""
+//        manifestPlaceholders["sentryRelease"] = "$applicationId@$versionName"
+//        manifestPlaceholders["sentryDsn"] = System.getenv("SENTRY_DSN") ?: ""
 
         bundle {
             language {
+                // We want to keep the translations in the final AAB for all the language
                 enableSplit = false
             }
         }
     }
 
-    buildFeatures {
-        viewBinding = true
-        compose = true
-        buildConfig = true
+    lint {
+        // Until we fully migrate to Material3 this lint issue is too verbose https://github.com/home-assistant/android/issues/5420
+        disable += listOf("UsingMaterialAndMaterial3Libraries")
     }
 
-    kotlinOptions {
-        jvmTarget = libs.versions.javaVersion.get()
-    }
+    experimentalProperties["android.experimental.enableScreenshotTest"] = true
 
-    compileOptions {
-        isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility(libs.versions.javaVersion.get())
-        targetCompatibility(libs.versions.javaVersion.get())
+    screenshotTests {
+        imageDifferenceThreshold = 0.00025f // 0.025%
     }
 
     firebaseAppDistribution {
@@ -63,16 +55,12 @@ android {
         groups = "continuous-deployment"
     }
 
-    val NESTOR_KEYSTORE_PASSWORD = System.getenv("NESTOR_KEYSTORE_PASSWORD")
-    val NESTOR_KEYSTORE_ALIAS = System.getenv("NESTOR_KEYSTORE_ALIAS")
-   // val PGY_API_KEY = System.getenv("PGY_API_KEY")
-
     signingConfigs {
         create("release") {
-            storeFile = file("../nestor.keystore")
-            storePassword = NESTOR_KEYSTORE_PASSWORD
-            keyAlias = NESTOR_KEYSTORE_ALIAS
-            keyPassword = NESTOR_KEYSTORE_PASSWORD
+            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "release_keystore.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+            keyAlias = System.getenv("KEYSTORE_ALIAS") ?: ""
+            keyPassword = System.getenv("KEYSTORE_ALIAS_PASSWORD") ?: ""
             enableV1Signing = true
             enableV2Signing = true
         }
@@ -80,22 +68,20 @@ android {
 
     buildTypes {
         named("debug").configure {
-            signingConfig = signingConfigs.getByName("release")
-            //manifestPlaceholders["pgy_api_key"] = PGY_API_KEY
+            applicationIdSuffix = ".debug"
         }
         named("release").configure {
             isDebuggable = false
             isJniDebuggable = false
             signingConfig = signingConfigs.getByName("release")
-           // manifestPlaceholders["pgy_api_key"] = PGY_API_KEY
         }
     }
     flavorDimensions.add("version")
     productFlavors {
-//        create("minimal") {
-//            applicationIdSuffix = ".minimal"
-//            versionNameSuffix = "-minimal"
-//        }
+        create("minimal") {
+            applicationIdSuffix = ".minimal"
+            versionNameSuffix = "-minimal"
+        }
         create("full") {
             applicationIdSuffix = ""
             versionNameSuffix = "-full"
@@ -202,6 +188,8 @@ dependencies {
 
     implementation(libs.car.core)
     "fullImplementation"(libs.car.projected)
+
+    screenshotTestImplementation(libs.compose.uiTooling)
 }
 
 // Disable to fix memory leak and be compatible with the configuration cache.
