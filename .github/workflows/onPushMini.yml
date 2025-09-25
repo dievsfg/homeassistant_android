@@ -1,6 +1,9 @@
 name: On Push Mini
 
 on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - test
   workflow_dispatch:
     inputs:
       beta:
