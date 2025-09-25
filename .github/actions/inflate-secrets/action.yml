@@ -36,9 +36,9 @@ runs:
       env:
         GOOGLE_SERVICES: ${{ inputs.google-services }}
       run: |
-        echo $GOOGLE_SERVICES > app/google-services.json
-        echo $GOOGLE_SERVICES > wear/google-services.json
-        echo $GOOGLE_SERVICES > automotive/google-services.json
+        printf "%s" "$GOOGLE_SERVICES" > app/google-services.json
+        printf "%s" "$GOOGLE_SERVICES" > wear/google-services.json
+        printf "%s" "$GOOGLE_SERVICES" > automotive/google-services.json
 
     - name: Inflate firebaseAppDistributionServiceCredentialsFile.json
       shell: bash
