@@ -38,7 +38,7 @@
 *   `SENTRY_DSN`: Sentry项目的DSN地址。
 
 **构建缓存 (可选但推荐):**
-*   `GRADLE_ENCRYPTION_KEY`: 用于加密Gradle构建缓存的密钥。**您可以将其设置为任意一个足够长且随机的字符串**。例如，您可以使用密码生成器生成一个32位的随机字符串。
+*   `GRADLE_ENCRYPTION_KEY`: 用于加密Gradle构建缓存的密钥。**重要提示：** 它的长度**必须**是16、24或32个字符。推荐使用密码生成器生成一个32位的随机字符串。
 
 ---
 
@@ -220,6 +220,7 @@ Sentry是一个用于实时监控和报告应用崩溃的平台。DSN (Data Sour
 
 1.  **进入Actions页面**: 在您的GitHub仓库主页，点击顶部的 `Actions` 标签。
 2.  **选择工作流**: 在左侧列表中，点击 `On Push Mini`。
+    *   **提示**: 如果您第一次进入Actions页面时，左侧列表是空的，这是正常的。您需要先将包含`.github/workflows/onPushMini.yml`文件的代码**推送（push）**到您的`test`分支，GitHub识别到新文件后，`On Push Mini`才会出现在列表中。
 3.  **启动工作流**:
     *   在页面右侧，点击 `Run workflow` 按钮。
     *   在弹出的菜单中，选择您要构建代码的分支（例如 `test`）。

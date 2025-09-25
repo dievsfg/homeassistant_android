@@ -1,9 +1,12 @@
-name: On Push Mini
+name: On Manual Run
 
-on: # yamllint disable-line rule:truthy
-  push:
-    branches:
-      - test
+on:
+  workflow_dispatch:
+    inputs:
+      beta:
+        description: "true if this is a beta release"
+        required: false
+        default: "false"
 
 env:
   SUPPLY_UPLOAD_MAX_RETRIES: 5
