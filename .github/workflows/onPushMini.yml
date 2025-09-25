@@ -1,0 +1,71 @@
+name: On Push Mini
+
+on: # yamllint disable-line rule:truthy
+  workflow_dispatch:
+    inputs:
+      beta:
+        description: "true if this is a beta release"
+        required: false
+        default: "false"
+
+env:
+  SUPPLY_UPLOAD_MAX_RETRIES: 5
+
+jobs:
+  app_build:
+    name: Build APKs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-build-env
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+      - uses: ruby/setup-ruby@44511735964dcb71245e7e55f72539531f7bc0eb # v1.257.0
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - uses: ./.github/actions/create-release-number
+        name: Create Release Number
+        id: rel_number
+
+      - uses: ./.github/actions/inflate-secrets
+        name: Inflate Secrets
+        with:
+          keystore: ${{ secrets.ORIGINAL_KEYSTORE_FILE }}
+          google-services: ${{ secrets.GOOGLESERVICES }}
+          firebase-creds: ${{ secrets.FIREBASECREDS }}
+
+      - uses: ./.github/actions/create-release-notes
+        name: Create Release Notes
+        with:
+          tag-name: ${{ steps.rel_number.outputs.version }}
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+
+#      - uses: ./.github/actions/download-translations
+#        name: Download Translations
+#        with:
+#          lokalise-project: ${{ secrets.LOKALISE_PROJECT }}
+#          lokalise-token: ${{ secrets.LOKALISE_TOKEN }}
+
+      - name: Build Release APKs
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ORIGINAL_KEYSTORE_FILE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.ORIGINAL_KEYSTORE_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.ORIGINAL_KEYSTORE_ALIAS_PASSWORD }}
+          VERSION_CODE: ${{ steps.rel_number.outputs.version-code }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: |
+          ./gradlew :common:assemble :app:assembleRelease :wear:assembleRelease :automotive:assembleRelease
+
+      - name: Archive APKs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-apks
+          path: ./**/*.apk
