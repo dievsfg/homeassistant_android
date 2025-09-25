@@ -15,11 +15,7 @@ runs:
       shell: bash
       run: |
         ./gradlew versionFile --no-configuration-cache
-        COMMITS=`git rev-list --count HEAD`
-        TAGS=`git tag | grep -v beta | wc -l`
-        VC=$((((COMMITS+TAGS) * 3) << 1))
-        echo Number Commits $COMMITS
-        echo Number Tags $TAGS
+        VC=`date +%Y%m%d%H%M`
         echo Version Code $VC
         echo "version-code=$VC" >> $GITHUB_OUTPUT
         VERSION=`cat version.txt`
