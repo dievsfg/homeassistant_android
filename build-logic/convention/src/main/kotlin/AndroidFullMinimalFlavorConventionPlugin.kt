@@ -33,10 +33,10 @@ class AndroidFullMinimalFlavorConventionPlugin : Plugin<Project> {
                         applicationIdSuffix = ""
                         versionNameSuffix = "-full"
                     }
-                    create("china") {
-                        applicationIdSuffix = ".china"
-                        versionNameSuffix = "-china"
-                    }
+//                    create("china") {
+//                        applicationIdSuffix = ".china"
+//                        versionNameSuffix = "-china"
+//                    }
 
                     // Generate a list of application ids into BuildConfig
                     val values = productFlavors.joinToString {
