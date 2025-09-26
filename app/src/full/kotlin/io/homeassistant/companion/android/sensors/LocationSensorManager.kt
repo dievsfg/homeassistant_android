@@ -55,6 +55,7 @@ import io.homeassistant.companion.android.location.HighAccuracyLocationService
 import io.homeassistant.companion.android.notifications.MessagingManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.IOException
@@ -177,7 +178,8 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
 
         private var lastHighAccuracyTriggerRange: Int = 0
         private var lastHighAccuracyZones: List<String> = ArrayList()
-
+        private var lastWatchdogRun: Long = 0
+        
         enum class LocationUpdateTrigger(val isGeofence: Boolean = false) {
             HIGH_ACCURACY_LOCATION,
             BACKGROUND_LOCATION,
@@ -309,7 +311,13 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
 //            }
 
             val now = System.currentTimeMillis()
-            if (
+            if (lastLocationReceived.isEmpty() || (now - lastWatchdogRun) < 60000) {
+                if (lastLocationReceived.isEmpty()) {
+                    serverManager(latestContext).defaultServers.forEach {
+                        lastLocationReceived[it.id] = now
+                    }
+                }
+            } else if (
                 (!highAccuracyModeEnabled && isBackgroundLocationSetup) &&
                 (lastLocationReceived.all { (it.value + (DEFAULT_LOCATION_MAX_WAIT_TIME * 2L)) < now })
             ) {
@@ -317,15 +325,19 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 isBackgroundLocationSetup = false
                 //fusedLocationProviderClient?.flushLocations()
                 removeBackgroundUpdateRequests()
+                lastWatchdogRun = now
             } else if (
                 highAccuracyModeEnabled &&
                 (lastLocationReceived.all { (it.value + (getHighAccuracyModeUpdateInterval().toLong() * 2000L)) < now })
             ) {
                 Timber.d("High accuracy mode appears to have stopped, restarting high accuracy mode")
                 isBackgroundLocationSetup = false
+                // HighAccuracyLocationService.restartService(latestContext, getHighAccuracyModeUpdateInterval())
                 stopHighAccuracyService()
+                lastWatchdogRun = now
             }
 
+            delay(2000) // Wait 2 seconds to ensure service has stopped before continuing
             setupBackgroundLocation(backgroundEnabled, zoneEnabled)
         } catch (e: Exception) {
             Timber.e(e, "Issue setting up location tracking")
