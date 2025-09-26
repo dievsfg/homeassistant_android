@@ -1,0 +1,40 @@
+name: Personal Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - nesror-main
+
+jobs:
+  process:
+    name: all process
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'adopt'
+          java-version: '21'
+
+      - name: Decode google-services.json
+        run: echo "${{ secrets.GOOGLESERVICES }}" | base64 --decode > app/google-services.json
+
+      - name: Decode Keystore
+        run: echo "${{ secrets.ORIGINAL_KEYSTORE_FILE }}" | base64 --decode > nestor.keystore
+
+      - name: Build with Gradle
+        run: chmod +x gradlew &&./gradlew aR
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          NESTOR_KEYSTORE_ALIAS: ${{ secrets.ORIGINAL_KEYSTORE_ALIAS }}
+          NESTOR_KEYSTORE_PASSWORD: ${{ secrets.ORIGINAL_KEYSTORE_FILE_PASSWORD }}
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: apk-release
+          path: "**/release/*.apk"
