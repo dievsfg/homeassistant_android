@@ -44,6 +44,7 @@ class HighAccuracyLocationService : Service() {
         @Synchronized
         fun startService(context: Context, intervalInSeconds: Int) {
             Timber.d("Try starting high accuracy location service (Interval: ${intervalInSeconds}s)...")
+            Timber.d("dievlog: 尝试启动高精度定位服务，更新间隔: ${intervalInSeconds}秒")
             LAUNCHER.startService(context) {
                 putExtra("intervalInSeconds", intervalInSeconds)
             }
@@ -52,6 +53,7 @@ class HighAccuracyLocationService : Service() {
         @Synchronized
         fun stopService(context: Context) {
             Timber.d("Try stopping high accuracy location service...")
+            Timber.d("dievlog: 尝试停止高精度定位服务")
             LAUNCHER.stopService(context)
         }
 
@@ -165,6 +167,7 @@ class HighAccuracyLocationService : Service() {
         requestLocationUpdates(intervalInSeconds)
 
         Timber.d("High accuracy location service (Interval: ${intervalInSeconds}s) started -> onStartCommand")
+        Timber.d("dievlog: 高精度定位服务已启动，更新间隔: ${intervalInSeconds}秒")
         return START_NOT_STICKY
     }
 
@@ -206,5 +209,6 @@ class HighAccuracyLocationService : Service() {
             null
         }
         fusedLocationProviderClient?.requestLocationUpdates(request, getLocationUpdateIntent())
+        Timber.d("dievlog: [高精度模式] 已向系统请求位置更新")
     }
 }

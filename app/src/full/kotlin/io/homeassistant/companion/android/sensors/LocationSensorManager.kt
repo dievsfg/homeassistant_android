@@ -316,6 +316,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                     serverManager(latestContext).defaultServers.forEach {
                         lastLocationReceived[it.id] = now
                     }
+                    lastWatchdogRun = now
                 }
             } else if (
                 (!highAccuracyModeEnabled && isBackgroundLocationSetup) &&
@@ -375,8 +376,10 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                             removeBackgroundUpdateRequests()
                             startHighAccuracyService(updateIntervalHighAccuracySeconds)
                         }
+                        Timber.d("dievlog: 检测到模式切换，正在启动高精度定位服务")
                     } else {
                         Timber.d("High accuracy mode parameters changed. Disable high accuracy mode.")
+                        Timber.d("dievlog: 检测到模式切换，正在停止高精度服务并切换到普通后台定位")
                         stopHighAccuracyService()
                         requestLocationUpdates()
                     }
@@ -657,6 +660,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             return
         }
         Timber.d("Registering for location updates.")
+        Timber.d("dievlog: [普通模式] 正在请求后台位置更新")
         val amapKey = latestContext.getSharedPreferences("config", Context.MODE_PRIVATE)
             .getString("amapKey", "")
         //if (amapKey.isNullOrEmpty() || amapKey == "0") {
@@ -698,12 +702,18 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
         val locationManager =
             context.getSystemService(LOCATION_SERVICE) as LocationManager
 
-        if (lastTime != 0L && System.currentTimeMillis() - lastTime < 30000) return
+        if (lastTime != 0L && System.currentTimeMillis() - lastTime < 30000) {
+            Timber.d("dievlog: [普通模式] 请求被跳过，因为距离上次请求不足30秒")
+            return
+        }
         lastTime = System.currentTimeMillis()
         canCloseGps = latestContext.getSharedPreferences("config", Context.MODE_PRIVATE)
             .getInt("canCloseGps", 0)
         checkGps(wifi)
-        if (canCloseGps > 15) return
+        if (canCloseGps > 15) {
+            Timber.d("dievlog: [普通模式] GPS定位请求被暂停，因为设备可能长时间连接Wi-Fi")
+            return
+        }
 
         locationManager.requestLocationUpdates(
             LocationManager.GPS_PROVIDER,
@@ -711,7 +721,11 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             5f,
             object : LocationListener {
                 override fun onLocationChanged(it: Location) {
-                    if (canCloseGps > 2) return
+                    if (canCloseGps > 2) {
+                        Timber.d("dievlog: [普通模式-GPS] 收到的位置被忽略，因为在收到信号前设备已连接Wi-Fi")
+                        return
+                    }
+                    Timber.d("dievlog: [普通模式-GPS] 成功获取到位置, 坐标: ${it.latitude}, ${it.longitude}, 精度: ${it.accuracy}")
                     runBlocking {
                         getEnabledServers(
                             latestContext,
@@ -733,6 +747,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             locationManager.requestSingleUpdate(
                 LocationManager.NETWORK_PROVIDER,
                 {
+                    Timber.d("dievlog: [普通模式-网络单次] 成功获取到位置, 坐标: ${it.latitude}, ${it.longitude}, 精度: ${it.accuracy}")
                     runBlocking {
                         getEnabledServers(
                             latestContext,
@@ -880,6 +895,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
         Timber.d(
                 "Last Location: \nCoords:(${location.latitude}, ${location.longitude})\nAccuracy: ${location.accuracy}\nBearing: ${location.bearing}",
         )
+        Timber.d("dievlog: 准备上报位置更新。来源: ${location.provider}, 坐标: ${location.latitude}, ${location.longitude}, 精度: ${location.accuracy}")
         var accuracy = 0
         if (location.accuracy.toInt() >= 0) {
             accuracy = location.accuracy.toInt()
@@ -888,7 +904,10 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             val minAccuracy = sensorSettings
                 .firstOrNull { it.name == SETTING_ACCURACY }?.value?.toIntOrNull()
                 ?: DEFAULT_MINIMUM_ACCURACY
-            if (accuracy > minAccuracy ) return
+            if (accuracy > minAccuracy ) {
+                Timber.d("dievlog: 位置更新被跳过，因为当前精度(${accuracy}米)低于设定的最低要求(${minAccuracy}米)")
+                return
+            }
         }
         val now = System.currentTimeMillis()
 
@@ -922,6 +941,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             Timber.d(
                 "Skipping old location update since time is before the last one we sent, received: ${location.time} last sent: $lastLocationSend",
             )
+            Timber.d("dievlog: 位置更新被跳过，因为时间戳过于陈旧")
             return
         }
 
@@ -968,6 +988,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
         ioScope.launch {
             try {
                 serverManager(latestContext).integrationRepository(serverId).updateLocation(updateLocation)
+                Timber.d("dievlog: 位置更新已成功发送至服务器")
                 //Timber.d("Location update sent successfully for $serverId as $updateLocationAs")
                 lastLocationSend[serverId] = now
                 lastUpdateLocation[serverId] = updateLocationString
@@ -985,6 +1006,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Could not update location for $serverId.")
+                Timber.e(e, "dievlog: 位置更新发送失败")
                 //logLocationUpdate(location, updateLocation, serverId, trigger, LocationHistoryItemResult.FAILED_SEND)
             }
         }
@@ -1254,3 +1276,4 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
         fun prefsRepository(): PrefsRepository
     }
 }
+
