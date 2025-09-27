@@ -233,22 +233,36 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             when (intent.action) {
                 Intent.ACTION_BOOT_COMPLETED,
                 ACTION_REQUEST_LOCATION_UPDATES,
-                -> setupLocationTracking()
+                -> {
+                    Timber.d("dievlog: 收到 [${intent.action}] 广播，开始设置定位追踪")
+                    setupLocationTracking()
+                }
 
                 ACTION_PROCESS_LOCATION,
                 ACTION_PROCESS_HIGH_ACCURACY_LOCATION,
-                -> handleLocationUpdate(intent)
+                -> {
+                    Timber.d("dievlog: 收到 [${intent.action}] 广播，开始处理位置数据")
+                    handleLocationUpdate(intent)
+                }
 
-                ACTION_PROCESS_GEO -> handleLocationUpdate(intent)
-                ACTION_REQUEST_ACCURATE_LOCATION_UPDATE -> requestSingleAccurateLocation()
+                ACTION_PROCESS_GEO -> {
+                    Timber.d("dievlog: 收到地理围栏事件广播，开始处理位置数据")
+                    handleLocationUpdate(intent)
+                }
+                ACTION_REQUEST_ACCURATE_LOCATION_UPDATE -> {
+                    Timber.d("dievlog: 收到单次精准定位请求广播")
+                    requestSingleAccurateLocation()
+                }
                 ACTION_FORCE_HIGH_ACCURACY -> {
                     when (val command = intent.extras?.getString("command")) {
                         DeviceCommandData.TURN_ON, DeviceCommandData.TURN_OFF, MessagingManager.FORCE_ON -> {
                             val turnOn = command != DeviceCommandData.TURN_OFF
                             if (turnOn) {
                                 Timber.d("Forcing of high accuracy mode enabled")
+                                Timber.d("dievlog: 收到强制开启高精度模式指令")
                             } else {
                                 Timber.d("Forcing of high accuracy mode disabled")
+                                Timber.d("dievlog: 收到取消强制开启高精度模式指令")
                             }
                             forceHighAccuracyModeOn = turnOn
                             forceHighAccuracyModeOff = false
@@ -258,6 +272,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
 
                         MessagingManager.FORCE_OFF -> {
                             Timber.d("High accuracy mode forced off")
+                            Timber.d("dievlog: 收到强制关闭高精度模式指令")
                             forceHighAccuracyModeOn = false
                             forceHighAccuracyModeOff = true
                             setupBackgroundLocation()
@@ -271,7 +286,10 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                     }
                 }
 
-                else -> Timber.w("Unknown intent action: ${intent.action}!")
+                else -> {
+                    Timber.w("Unknown intent action: ${intent.action}!")
+                    Timber.w("dievlog: 未知intent action: ${intent.action}!")
+                }
             }
         }
     }
@@ -279,6 +297,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
     private suspend fun setupLocationTracking() {
         if (!checkPermission(latestContext, backgroundLocation.id)) {
             Timber.w("Not starting location reporting because of permissions.")
+            Timber.d("dievlog: 因缺少定位权限，定位任务中止")
             return
         }
 
@@ -290,6 +309,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 removeAllLocationUpdateRequests()
                 isBackgroundLocationSetup = false
                 isZoneLocationSetup = false
+                Timber.d("dievlog: 后台定位和区域定位均已禁用，正在移除所有定位请求")
             }
             if (!zoneEnabled && isZoneLocationSetup) {
                 //removeGeofenceUpdateRequests()
@@ -323,6 +343,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 (lastLocationReceived.all { (it.value + (DEFAULT_LOCATION_MAX_WAIT_TIME * 2L)) < now })
             ) {
                 Timber.d("Background location updates appear to have stopped, restarting location updates")
+                Timber.d("dievlog: [看门狗] 检测到普通后台定位可能已停止，正在尝试重启")
                 isBackgroundLocationSetup = false
                 //fusedLocationProviderClient?.flushLocations()
                 removeBackgroundUpdateRequests()
@@ -332,6 +353,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 (lastLocationReceived.all { (it.value + (getHighAccuracyModeUpdateInterval().toLong() * 2000L)) < now })
             ) {
                 Timber.d("High accuracy mode appears to have stopped, restarting high accuracy mode")
+                Timber.d("dievlog: [看门狗] 检测到高精度定位可能已停止，正在尝试重启")
                 isBackgroundLocationSetup = false
                 // HighAccuracyLocationService.restartService(latestContext, getHighAccuracyModeUpdateInterval())
                 stopHighAccuracyService()
@@ -342,6 +364,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             setupBackgroundLocation(backgroundEnabled, zoneEnabled)
         } catch (e: Exception) {
             Timber.e(e, "Issue setting up location tracking")
+            Timber.e(e, "dievlog: 设置定位追踪时发生问题")
         }
     }
 
@@ -370,6 +393,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
                 ) {
                     if (highAccuracyModeEnabled) {
                         Timber.d("High accuracy mode parameters changed. Enable high accuracy mode.")
+                        Timber.d("dievlog: 高精度模式参数已更改。启用高精度模式。")
                         if (updateIntervalHighAccuracySeconds != lastHighAccuracyUpdateInterval) {
                             restartHighAccuracyService(updateIntervalHighAccuracySeconds)
                         } else {
@@ -483,23 +507,29 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
         // As soon as the high accuracy mode should be enabled, disable the force_on of high accuracy mode!
         if (shouldEnableHighAccuracyMode && forceHighAccuracyModeOn) {
             Timber.d("Forcing of high accuracy mode disabled, because high accuracy mode had to be enabled anyway.")
+            Timber.d("dievlog: 强制开启高精度模式已禁用，因为高精度模式无论如何都必须启用。")
             forceHighAccuracyModeOn = false
         }
 
         // As soon as the high accuracy mode shouldn't be enabled, disable the force_off of high accuracy mode!
         if (!shouldEnableHighAccuracyMode && forceHighAccuracyModeOff) {
             Timber.d("Forcing off of high accuracy mode disabled, because high accuracy mode had to be disabled anyway.")
+            Timber.d("dievlog: 强制关闭高精度模式已禁用，因为高精度模式无论如何都必须禁用。")
             forceHighAccuracyModeOff = false
         }
 
         return if (forceHighAccuracyModeOn) {
             Timber.d("High accuracy mode enabled, because command_high_accuracy_mode was used to turn it on")
+            Timber.d("dievlog: [高精度决策] 最终决策：开启（原因：强制指令）")
             true
         } else if (forceHighAccuracyModeOff) {
             Timber.d("High accuracy mode disabled, because command_high_accuracy_mode was used to force it off")
+            Timber.d("dievlog: [高精度决策] 最终决策：关闭（原因：强制关闭指令）")
             false
         } else {
-            shouldEnableHighAccuracyMode
+            val enable = shouldEnableHighAccuracyMode
+            Timber.d("dievlog: [高精度决策] 最终决策：${if (enable) "开启" else "关闭"}（原因：根据约束自动判断）")
+            enable
         }
     }
 
@@ -565,8 +595,10 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             if (!forceHighAccuracyModeOn && !forceHighAccuracyModeOff) {
                 if (!btDevConnected) {
                     Timber.d("High accuracy mode disabled, because defined ($highAccuracyModeBTDevices) bluetooth device(s) not connected (Connected devices: $bluetoothDevices)")
+                    Timber.d("dievlog: [高精度决策] 蓝牙设备未连接，不满足开启条件")
                 } else {
                     Timber.d("High accuracy mode enabled, because defined ($highAccuracyModeBTDevices) bluetooth device(s) connected (Connected devices: $bluetoothDevices)")
+                    Timber.d("dievlog: [高精度决策] 蓝牙设备已连接，满足开启条件")
                 }
             }
         }
@@ -586,8 +618,10 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             if (!forceHighAccuracyModeOn && !forceHighAccuracyModeOff) {
                 if (!inZone) {
                     Timber.d("High accuracy mode disabled, because not in zone $highAccuracyExpZones")
+                    Timber.d("dievlog: [高精度决策] 设备不在指定区域内，不满足开启条件")
                 } else {
                     Timber.d("High accuracy mode enabled, because in zone $highAccuracyExpZones")
+                    Timber.d("dievlog: [高精度决策] 设备在指定区域内，满足开启条件")
                 }
             }
         }
@@ -647,6 +681,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
 
     private fun removeAllLocationUpdateRequests() {
         Timber.d("Removing all location requests.")
+        Timber.d("dievlog: 正在移除所有定位请求。")
         removeBackgroundUpdateRequests()
     }
 
@@ -765,6 +800,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
             locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
                 ?.let {
                     Timber.e("${it.latitude}:${it.longitude}")
+                    Timber.e("dievlog: 获取到的最后已知GPS坐标: ${it.latitude}:${it.longitude}")
                     if (lastTime2 != 0L && System.currentTimeMillis() - lastTime2 < 180000) return@let
                     getEnabledServers(
                         latestContext,
@@ -867,6 +903,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
 
     private suspend fun handleLocationUpdate(intent: Intent) {
         Timber.d("Received location update.")
+        Timber.d("dievlog: 收到新的位置数据包，开始处理...")
         val serverIds = getEnabledServers(latestContext, backgroundLocation)
         serverIds.forEach {
             lastLocationReceived[it] = System.currentTimeMillis()
@@ -1080,10 +1117,12 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
     private suspend fun requestSingleAccurateLocation() {
         if (!checkPermission(latestContext, singleAccurateLocation.id)) {
             Timber.w("Not getting single accurate location because of permissions.")
+            Timber.d("dievlog: [单次精准定位] 请求失败，原因：权限不足")
             return
         }
         if (!isEnabled(latestContext, singleAccurateLocation)) {
             Timber.w("Requested single accurate location but it is not enabled.")
+            Timber.d("dievlog: [单次精准定位] 请求失败，原因：功能未开启")
             return
         }
 
@@ -1105,6 +1144,7 @@ class LocationSensorManager :  BroadcastReceiver(), SensorManager {
         // Only update accurate location at most once a minute
         if (now < latestAccurateLocation + minTimeBetweenUpdates) {
             Timber.d("Not requesting accurate location, last accurate location was too recent")
+            Timber.d("dievlog: [单次精准定位] 请求被跳过，因为距离上次请求过于频繁")
             return
         }
         sensorDao.add(

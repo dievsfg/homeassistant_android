@@ -59,6 +59,7 @@ class HighAccuracyLocationService : Service() {
 
         fun restartService(context: Context, intervalInSeconds: Int) {
             Timber.d("Try restarting high accuracy location service (Interval: ${intervalInSeconds}s)...")
+            Timber.d("dievlog: 尝试重启高精度定位服务 (间隔: ${intervalInSeconds}s)...")
             LAUNCHER.restartService(context) {
                 putExtra("intervalInSeconds", intervalInSeconds)
             }
@@ -158,6 +159,7 @@ class HighAccuracyLocationService : Service() {
         }
 
         Timber.d("High accuracy location service created -> onCreate")
+        Timber.d("dievlog: [高精度服务] 服务实例已创建 (onCreate)")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -174,6 +176,7 @@ class HighAccuracyLocationService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        Timber.d("dievlog: [高精度服务] 正在移除系统定位更新监听器")
         fusedLocationProviderClient?.removeLocationUpdates(getLocationUpdateIntent())
 
         LAUNCHER.onServiceDestroy(this)
@@ -182,6 +185,7 @@ class HighAccuracyLocationService : Service() {
         notificationManagerCompat.cancel(notificationId)
 
         Timber.d("High accuracy location service stopped -> onDestroy")
+        Timber.d("dievlog: [高精度服务] 服务实例已销毁 (onDestroy)")
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -206,6 +210,7 @@ class HighAccuracyLocationService : Service() {
             LocationServices.getFusedLocationProviderClient(this)
         } catch (e: Exception) {
             Timber.e(e, "Unable to get fused location provider client")
+            Timber.e(e, "dievlog: 无法获取fused location provider client")
             null
         }
         fusedLocationProviderClient?.requestLocationUpdates(request, getLocationUpdateIntent())
